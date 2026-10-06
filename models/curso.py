@@ -1,66 +1,87 @@
-"""
-PROCESO 3 · Modelo Curso (TAREA 3)
-Un curso conecta a los demás modelos: tiene un docente, varias asignaturas
-y varios estudiantes. Guarda solo sus identificadores, no los objetos completos.
-"""
+# =====================================================================
+# PROCESO 3 · Modelo Curso (TAREA 3)
+# Ejemplo de curso: nombre "Primer semestre", paralelo "A", periodo "2026-2"
+# =====================================================================
 
-# TUPLA de campos que el usuario escribe al crear un curso.
-CAMPOS_CURSO = ("nombre", "periodo")
+# Permite ejecutar este archivo solo (botón ▶) para hacer sus pruebas
+import os, sys
+sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+
+from shared.validaciones import esta_vacio
+
+# TUPLA con los campos que el usuario escribe
+CAMPOS_CURSO = ("nombre", "paralelo", "periodo")
 
 
 class Curso:
-    """MODELO: representa un curso (ej: "Primer semestre A", periodo "2026-2")."""
 
-    def __init__(self, id_curso, nombre, periodo, id_docente=None,
-                 asignaturas=None, estudiantes=None):
+    def __init__(self, id_curso, nombre, paralelo, periodo):
         self.id = id_curso
-        self.nombre = nombre
-        self.periodo = periodo
-        self.id_docente = id_docente                  # None = sin docente
-        # CONJUNTOS: códigos de asignaturas e ids de estudiantes, sin repetir
-        self.asignaturas = set(asignaturas) if asignaturas else set()
-        self.estudiantes = set(estudiantes) if estudiantes else set()
+        self.nombre = str(nombre).strip()
+        self.paralelo = str(paralelo).strip().upper()   # "a" -> "A"
+        self.periodo = str(periodo).strip()
 
-    def asignar_docente(self, id_docente):
-        self.id_docente = id_docente
+    def clave(self):
+        """TUPLA que identifica al curso. No pueden existir dos cursos
+        con el mismo nombre, paralelo y periodo."""
+        return (self.nombre.lower(), self.paralelo.lower(), self.periodo.lower())
 
-    def agregar_asignatura(self, codigo):
-        if codigo in self.asignaturas:
-            return False
-        self.asignaturas.add(codigo)
-        return True
-
-    def inscribir_estudiante(self, id_estudiante):
-        if id_estudiante in self.estudiantes:
-            return False
-        self.estudiantes.add(id_estudiante)
-        return True
-
-    def retirar_estudiante(self, id_estudiante):
-        if id_estudiante not in self.estudiantes:
-            return False
-        self.estudiantes.discard(id_estudiante)
-        return True
+    def validar(self):
+        """Devuelve una LISTA de errores. Lista vacía = datos correctos."""
+        errores = []
+        if esta_vacio(self.nombre):
+            errores.append("El nombre del curso es obligatorio. Ejemplo: Primer semestre")
+        if esta_vacio(self.paralelo):
+            errores.append("El paralelo es obligatorio. Ejemplo: A")
+        if esta_vacio(self.periodo):
+            errores.append("El periodo es obligatorio. Ejemplo: 2026-2")
+        return errores
 
     def a_diccionario(self):
         return {
             "id": self.id,
             "nombre": self.nombre,
+            "paralelo": self.paralelo,
             "periodo": self.periodo,
-            "id_docente": self.id_docente,
-            "asignaturas": sorted(self.asignaturas),   # set -> lista para JSON
-            "estudiantes": sorted(self.estudiantes),
         }
 
     @classmethod
     def desde_diccionario(cls, datos):
-        return cls(
-            datos["id"], datos["nombre"], datos["periodo"],
-            id_docente=datos.get("id_docente"),
-            asignaturas=set(datos.get("asignaturas", [])),   # lista -> set
-            estudiantes=set(datos.get("estudiantes", [])),
-        )
+        return cls(datos["id"], datos["nombre"], datos["paralelo"], datos["periodo"])
 
     def __str__(self):
-        return (f"[{self.id}] {self.nombre} ({self.periodo}) - "
-                f"{len(self.estudiantes)} estudiante(s)")
+        return f"[{self.id}] {self.nombre} - Paralelo {self.paralelo} ({self.periodo})"
+
+
+# ---------------------------------------------------------------------
+# PRUEBAS: se ejecutan solo si abres ESTE archivo y le das ▶ (Run).
+# ---------------------------------------------------------------------
+def probar():
+    from shared.utilidades import mostrar_prueba
+    print("\n=== PRUEBAS DEL MODELO Curso ===")
+
+    bueno = Curso(1, "Primer semestre", "a", "2026-2")
+    mostrar_prueba("Datos correctos no tienen errores", bueno.validar() == [])
+    mostrar_prueba("El paralelo se guarda en mayúscula", bueno.paralelo == "A")
+
+    sin_periodo = Curso(2, "Segundo semestre", "B", "")
+    mostrar_prueba("Detecta periodo vacío", len(sin_periodo.validar()) == 1)
+
+    todo_vacio = Curso(3, "", "", "")
+    mostrar_prueba("Detecta los 3 campos vacíos", len(todo_vacio.validar()) == 3)
+
+    otro = Curso(9, "PRIMER SEMESTRE", "A", "2026-2")
+    mostrar_prueba("Dos cursos iguales tienen la misma clave (aunque cambien mayúsculas)",
+                   bueno.clave() == otro.clave())
+
+    copia = Curso.desde_diccionario(bueno.a_diccionario())
+    mostrar_prueba("Convertir a diccionario y volver no pierde datos",
+                   copia.a_diccionario() == bueno.a_diccionario())
+
+    print("\nMensajes que vería el usuario si deja todo vacío:")
+    for error in todo_vacio.validar():
+        print("  -", error)
+
+
+if __name__ == "__main__":
+    probar()

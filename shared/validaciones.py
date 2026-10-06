@@ -1,53 +1,58 @@
-"""
-PROCESO 2 · Funciones de validación
-Reglas pequeñas y reutilizables. Las usan TODOS los controladores.
-Ninguna función imprime nada: solo devuelven True/False o un valor.
-"""
+# =====================================================================
+# PROCESO 2 · Funciones de validación
+# Funciones pequeñas que responden True (correcto) o False (incorrecto).
+# Las usan los modelos y los controladores para revisar lo que
+# escribió el usuario. Ninguna imprime nada.
+# =====================================================================
 
-# TUPLA: valores fijos del sistema, nadie los modifica en ejecución
-RANGO_NOTA = (0, 20)          # (mínimo, máximo) de una nota
-RANGO_CREDITOS = (1, 10)      # (mínimo, máximo) de créditos de una asignatura
+
+def esta_vacio(texto):
+    """True si el texto está vacío o solo tiene espacios."""
+    return str(texto).strip() == ""
 
 
 def es_email_valido(texto):
-    """Validación mínima: un @, algo antes, algo después y un punto en el dominio."""
+    """True si el email tiene un @, algo antes y un punto en el dominio.
+    Ejemplo válido: ana@correo.com"""
     texto = str(texto).strip()
-    if texto.count("@") != 1:
+    if texto.count("@") != 1:          # debe tener exactamente un @
         return False
     usuario, dominio = texto.split("@")
-    return len(usuario) > 0 and "." in dominio and not dominio.endswith(".")
+    return usuario != "" and "." in dominio and not dominio.endswith(".")
 
 
-def campos_faltantes(valores, obligatorios):
-    """LISTA con los campos obligatorios que llegaron vacíos (recorre la TUPLA)."""
-    return [campo for campo in obligatorios if not valores.get(campo)]
+def es_entero_en_rango(texto, minimo, maximo):
+    """True si el texto es un número entero entre minimo y maximo."""
+    texto = str(texto).strip()
+    if not texto.isdigit():            # isdigit(): solo dígitos 0-9
+        return False
+    return minimo <= int(texto) <= maximo
 
 
-def campos_no_validos(cambios, permitidos):
-    """DIFERENCIA DE CONJUNTOS: campos que se enviaron pero no existen."""
-    return set(cambios) - set(permitidos)
+# ---------------------------------------------------------------------
+# PRUEBAS: se ejecutan solo si abres ESTE archivo y le das ▶ (Run).
+# ---------------------------------------------------------------------
+def probar():
+    print("\n=== PRUEBAS DE validaciones ===")
+    # Cada prueba es una TUPLA: (descripción, resultado obtenido, resultado esperado)
+    pruebas = [
+        ("Texto vacío se detecta", esta_vacio("   "), True),
+        ("Texto con letras no está vacío", esta_vacio("Ana"), False),
+        ("Email correcto", es_email_valido("ana@correo.com"), True),
+        ("Email sin @", es_email_valido("anacorreo.com"), False),
+        ("Email con dos @", es_email_valido("ana@@correo.com"), False),
+        ("Email sin punto", es_email_valido("ana@correo"), False),
+        ("Número 5 entre 1 y 10", es_entero_en_rango("5", 1, 10), True),
+        ("Número 15 fuera de 1 a 10", es_entero_en_rango("15", 1, 10), False),
+        ("Letras no son número", es_entero_en_rango("abc", 1, 10), False),
+        ("Número negativo no vale", es_entero_en_rango("-3", 1, 10), False),
+    ]
+    for descripcion, obtenido, esperado in pruebas:
+        if obtenido == esperado:
+            print(f"✔ {descripcion}")
+        else:
+            print(f"✘ ERROR: {descripcion}")
 
 
-def convertir_nota(valor):
-    """Devuelve la nota como número si está entre 0 y 20; si no, None."""
-    try:
-        nota = float(valor)
-    except (TypeError, ValueError):
-        return None
-    minimo, maximo = RANGO_NOTA          # desempaquetado de tupla
-    if minimo <= nota <= maximo:
-        # 18.0 se guarda como 18; 18.5 se queda como 18.5
-        return int(nota) if nota.is_integer() else nota
-    return None
-
-
-def convertir_creditos(valor):
-    """Devuelve los créditos como entero si están entre 1 y 10; si no, None."""
-    try:
-        creditos = int(str(valor).strip())
-    except (TypeError, ValueError):
-        return None
-    minimo, maximo = RANGO_CREDITOS
-    if minimo <= creditos <= maximo:
-        return creditos
-    return None
+if __name__ == "__main__":
+    probar()

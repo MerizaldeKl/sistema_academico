@@ -1,52 +1,41 @@
-"""
-PROCESO 4 · ControladorAsignatura (TAREA 2)
-El código de la asignatura funciona como identificador: es único y no se
-puede editar (así no se rompen los docentes y cursos que lo usan).
-"""
+# =====================================================================
+# PROCESO 4 · ControladorAsignatura (TAREA 2)
+# No usa print() ni input(). Devuelve (exito, mensaje) o datos.
+# =====================================================================
+
+# Permite ejecutar este archivo solo (botón ▶) para hacer sus pruebas
+import os, sys
+sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
 from models.asignatura import Asignatura, CAMPOS_ASIGNATURA
 from shared.archivo_json import ArchivoJSON
-from shared.validaciones import campos_faltantes, campos_no_validos, convertir_creditos
-from shared.utilidades import (
-    normalizar_datos, siguiente_id, valores_registrados,
-    buscar_posicion, coincide_busqueda,
-)
+from shared.utilidades import siguiente_id, valores_usados, buscar_posicion
 
 
 class ControladorAsignatura:
+
     CAMPOS = CAMPOS_ASIGNATURA
-    CAMPOS_EDITABLES = ("nombre", "creditos")      # el código NO se edita
-    CAMPOS_OBLIGATORIOS = ("codigo", "nombre", "creditos")
-    CAMPOS_BUSCABLES = ("codigo", "nombre")
 
-    def __init__(self):
-        self.archivo = ArchivoJSON("asignaturas.json")
+    def __init__(self, nombre_archivo="asignaturas.json"):
+        self.archivo = ArchivoJSON(nombre_archivo)
 
-    # ==================== C · CREATE ====================
+    # ---------------- C · CREAR ----------------
     def crear(self, datos):
-        valores = normalizar_datos(datos, self.CAMPOS)
-        valores["codigo"] = valores["codigo"].upper()
-
-        faltantes = campos_faltantes(valores, self.CAMPOS_OBLIGATORIOS)
-        if faltantes:
-            return False, f"Faltan campos obligatorios: {', '.join(faltantes)}"
-
-        creditos = convertir_creditos(valores["creditos"])
-        if creditos is None:
-            return False, "Los créditos deben ser un número entero entre 1 y 10"
-        valores["creditos"] = creditos
+        asignatura = Asignatura(0, datos["codigo"], datos["nombre"], datos["creditos"])
+        errores = asignatura.validar()
+        if errores:
+            return False, " ".join(errores)
 
         registros = self.archivo.leer()
-        if valores["codigo"].lower() in valores_registrados(registros, "codigo"):
-            return False, f"Ya existe una asignatura con código {valores['codigo']}"
+        if asignatura.codigo.lower() in valores_usados(registros, "codigo"):
+            return False, f"Ya existe una asignatura con código {asignatura.codigo}. Use otro código."
 
-        asignatura = Asignatura(siguiente_id(registros), **valores)
+        asignatura.id = siguiente_id(registros)
         registros.append(asignatura.a_diccionario())
-        if not self.archivo.guardar(registros):
-            return False, "No se pudo escribir el archivo"
-        return True, f"Asignatura {asignatura.nombre} creada con id {asignatura.id}"
+        self.archivo.guardar(registros)
+        return True, f"Asignatura {asignatura.nombre} creada con id {asignatura.id}."
 
-    # ==================== R · READ ====================
+    # ---------------- R · LEER ----------------
     def obtener_todos(self):
         return [Asignatura.desde_diccionario(r) for r in self.archivo.leer()]
 
@@ -56,58 +45,75 @@ class ControladorAsignatura:
                 return asignatura
         return None
 
-    def obtener_por_codigo(self, codigo):
-        codigo = str(codigo).strip().upper()
-        # DICCIONARIO índice {codigo: asignatura}: acceso directo por clave
-        indice = {a.codigo: a for a in self.obtener_todos()}
-        return indice.get(codigo)
+    # ---------------- BUSCAR ----------------
+    def buscar(self, texto):
+        texto = texto.strip().lower()
+        encontrados = []
+        for asignatura in self.obtener_todos():
+            for campo in self.CAMPOS:
+                if texto in str(getattr(asignatura, campo)).lower():
+                    encontrados.append(asignatura)
+                    break
+        return encontrados
 
-    # ==================== S · SEARCH ====================
-    def buscar(self, termino):
-        termino = str(termino).strip().lower()
-        if not termino:
-            return []
-        return [
-            Asignatura.desde_diccionario(r)
-            for r in self.archivo.leer()
-            if coincide_busqueda(r, termino, self.CAMPOS_BUSCABLES)
-        ]
-
-    # ==================== U · UPDATE ====================
-    def actualizar(self, id_asignatura, cambios):
-        cambios = {campo: str(valor).strip() for campo, valor in cambios.items()}
-
-        desconocidos = campos_no_validos(cambios, self.CAMPOS_EDITABLES)
-        if desconocidos:
-            return False, f"Campos no válidos: {', '.join(sorted(desconocidos))}"
-        if not cambios:
-            return False, "No se indicó ningún cambio"
-        vacios = campos_faltantes(cambios, list(cambios))
-        if vacios:
-            return False, f"No se pueden dejar vacíos: {', '.join(vacios)}"
-
-        if "creditos" in cambios:
-            creditos = convertir_creditos(cambios["creditos"])
-            if creditos is None:
-                return False, "Los créditos deben ser un número entero entre 1 y 10"
-            cambios["creditos"] = creditos
-
+    # ---------------- U · ACTUALIZAR ----------------
+    def actualizar(self, id_asignatura, datos):
         registros = self.archivo.leer()
         posicion = buscar_posicion(registros, id_asignatura)
         if posicion is None:
-            return False, f"No existe una asignatura con id {id_asignatura}"
+            return False, f"No existe una asignatura con id {id_asignatura}."
 
-        registros[posicion].update(cambios)
-        if not self.archivo.guardar(registros):
-            return False, "No se pudo escribir el archivo"
-        return True, f"Asignatura {id_asignatura} actualizada ({len(cambios)} campo/s)"
+        nueva = Asignatura(id_asignatura, datos["codigo"], datos["nombre"], datos["creditos"])
+        errores = nueva.validar()
+        if errores:
+            return False, " ".join(errores)
+        if nueva.codigo.lower() in valores_usados(registros, "codigo", id_asignatura):
+            return False, "Ese código ya lo usa otra asignatura."
 
-    # ==================== D · DELETE ====================
+        registros[posicion] = nueva.a_diccionario()
+        self.archivo.guardar(registros)
+        return True, f"Asignatura {id_asignatura} actualizada."
+
+    # ---------------- D · ELIMINAR ----------------
     def eliminar(self, id_asignatura):
         registros = self.archivo.leer()
         quedan = [r for r in registros if r["id"] != id_asignatura]
         if len(quedan) == len(registros):
-            return False, f"No existe una asignatura con id {id_asignatura}"
-        if not self.archivo.guardar(quedan):
-            return False, "No se pudo escribir el archivo"
-        return True, f"Asignatura {id_asignatura} eliminada"
+            return False, f"No existe una asignatura con id {id_asignatura}."
+        self.archivo.guardar(quedan)
+        return True, f"Asignatura {id_asignatura} eliminada."
+
+
+# ---------------------------------------------------------------------
+# PRUEBAS: se ejecutan solo si abres ESTE archivo y le das ▶ (Run).
+# ---------------------------------------------------------------------
+def probar():
+    from shared.utilidades import mostrar_prueba
+    print("\n=== PRUEBAS DE ControladorAsignatura ===")
+    c = ControladorAsignatura("prueba_asignaturas.json")
+    c.archivo.borrar()
+
+    mate = {"codigo": "MAT101", "nombre": "Matemática", "creditos": "4"}
+    exito, _ = c.crear(mate)
+    mostrar_prueba("Crear una asignatura correcta", exito)
+
+    exito, mensaje = c.crear(dict(mate, codigo="mat101"))
+    mostrar_prueba("No deja repetir el código -> " + mensaje, not exito)
+
+    exito, mensaje = c.crear({"codigo": "FIS1", "nombre": "Física", "creditos": "veinte"})
+    mostrar_prueba("No acepta créditos con letras -> " + mensaje, not exito)
+
+    mostrar_prueba("Los créditos se guardan como número",
+                   c.archivo.leer()[0]["creditos"] == 4)
+
+    exito, _ = c.actualizar(1, dict(mate, creditos="5"))
+    mostrar_prueba("Actualizar los créditos", exito and c.obtener_por_id(1).creditos == "5")
+
+    exito, _ = c.eliminar(1)
+    mostrar_prueba("Eliminar la asignatura", exito and c.obtener_todos() == [])
+
+    c.archivo.borrar()
+
+
+if __name__ == "__main__":
+    probar()

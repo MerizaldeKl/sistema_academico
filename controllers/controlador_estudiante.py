@@ -1,163 +1,156 @@
-"""
-PROCESO 4 · ControladorEstudiante
-Aquí viven las cinco operaciones (crear, leer, buscar, editar, eliminar).
-Tres reglas que se cumplen en todo el archivo (igual que en la guía):
-  - No hay ni un print() ni un input(): el Controlador no habla con el usuario.
-  - Toda operación devuelve una TUPLA (exito, mensaje) o datos.
-  - Las validaciones ocurren ANTES de tocar el archivo.
-"""
+# =====================================================================
+# PROCESO 4 · ControladorEstudiante (lógica CRUD)
+# CRUD = Crear, Leer, Actualizar (Update), Eliminar (Delete) + Buscar.
+#
+# Reglas del controlador:
+#   - NO usa print() ni input(): no habla con el usuario.
+#   - Devuelve una TUPLA (exito, mensaje) o devuelve datos.
+#   - Valida ANTES de guardar en el archivo.
+# =====================================================================
+
+# Permite ejecutar este archivo solo (botón ▶) para hacer sus pruebas
+import os, sys
+sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
 from models.estudiante import Estudiante, CAMPOS_ESTUDIANTE
 from shared.archivo_json import ArchivoJSON
-from shared.validaciones import (
-    es_email_valido, campos_faltantes, campos_no_validos, convertir_nota,
-)
-from shared.utilidades import (
-    normalizar_datos, siguiente_id, valores_registrados,
-    buscar_posicion, coincide_busqueda,
-)
+from shared.utilidades import siguiente_id, valores_usados, buscar_posicion
 
 
 class ControladorEstudiante:
-    # TUPLAS de configuración: fijas
-    CAMPOS = CAMPOS_ESTUDIANTE                 # campos del formulario de creación
-    CAMPOS_EDITABLES = CAMPOS_ESTUDIANTE       # campos que se pueden actualizar
-    CAMPOS_OBLIGATORIOS = ("nombre", "apellido", "email", "carnet")
-    CAMPOS_BUSCABLES = ("nombre", "apellido", "email", "carnet")
 
-    def __init__(self):
-        self.archivo = ArchivoJSON("estudiantes.json")
+    CAMPOS = CAMPOS_ESTUDIANTE   # la Vista usa esta tupla para armar el formulario
 
-    # ==================== C · CREATE ====================
+    def __init__(self, nombre_archivo="estudiantes.json"):
+        # Cada controlador tiene su propio archivo JSON en data/
+        self.archivo = ArchivoJSON(nombre_archivo)
+
+    # ---------------- C · CREAR ----------------
     def crear(self, datos):
-        """datos: diccionario con las claves de CAMPOS. Devuelve (exito, mensaje)."""
-        valores = normalizar_datos(datos, self.CAMPOS)
+        """datos: DICCIONARIO con nombre, apellido, email y carnet."""
+        estudiante = Estudiante(0, datos["nombre"], datos["apellido"],
+                                datos["email"], datos["carnet"])
 
-        faltantes = campos_faltantes(valores, self.CAMPOS_OBLIGATORIOS)
-        if faltantes:
-            return False, f"Faltan campos obligatorios: {', '.join(faltantes)}"
+        # 1) ¿Los datos están bien escritos?
+        errores = estudiante.validar()
+        if errores:
+            return False, " ".join(errores)
 
-        if not es_email_valido(valores["email"]):
-            return False, f"El email '{valores['email']}' no tiene un formato válido"
-
+        # 2) ¿El email o el carnet ya existen? (se busca en un SET)
         registros = self.archivo.leer()
-        # Duplicados: búsqueda instantánea dentro de un CONJUNTO
-        if valores["email"].lower() in valores_registrados(registros, "email"):
-            return False, "Ese email ya está registrado"
-        if valores["carnet"].lower() in valores_registrados(registros, "carnet"):
-            return False, "Ese carnet ya está registrado"
+        if estudiante.email.lower() in valores_usados(registros, "email"):
+            return False, "Ese email ya está registrado. Use otro email."
+        if estudiante.carnet.lower() in valores_usados(registros, "carnet"):
+            return False, "Ese carnet ya está registrado. Use otro carnet."
 
-        # ** convierte el diccionario en argumentos con nombre
-        estudiante = Estudiante(siguiente_id(registros), **valores)
-        registros.append(estudiante.a_diccionario())      # agrego a la LISTA
-        if not self.archivo.guardar(registros):
-            return False, "No se pudo escribir el archivo"
-        return True, (f"Estudiante {estudiante.obtener_nombre_completo()} "
-                      f"creado con id {estudiante.id}")
+        # 3) Le doy un id, lo agrego a la LISTA y guardo
+        estudiante.id = siguiente_id(registros)
+        registros.append(estudiante.a_diccionario())
+        self.archivo.guardar(registros)
+        return True, f"Estudiante {estudiante.nombre_completo()} creado con id {estudiante.id}."
 
-    # ==================== R · READ ====================
+    # ---------------- R · LEER ----------------
     def obtener_todos(self):
-        """LISTA de objetos Estudiante."""
+        """Devuelve una LISTA de objetos Estudiante."""
         return [Estudiante.desde_diccionario(r) for r in self.archivo.leer()]
 
     def obtener_por_id(self, id_estudiante):
+        """Devuelve el estudiante con ese id, o None si no existe."""
         for estudiante in self.obtener_todos():
             if estudiante.id == id_estudiante:
                 return estudiante
         return None
 
-    # ==================== S · SEARCH ====================
-    def buscar(self, termino):
-        """Búsqueda lineal en los campos de CAMPOS_BUSCABLES."""
-        termino = str(termino).strip().lower()
-        if not termino:
-            return []
-        return [
-            Estudiante.desde_diccionario(r)
-            for r in self.archivo.leer()
-            if coincide_busqueda(r, termino, self.CAMPOS_BUSCABLES)
-        ]
+    # ---------------- BUSCAR ----------------
+    def buscar(self, texto):
+        """Devuelve los estudiantes que contienen el texto en algún campo."""
+        texto = texto.strip().lower()
+        encontrados = []
+        for estudiante in self.obtener_todos():
+            for campo in self.CAMPOS:
+                if texto in getattr(estudiante, campo).lower():
+                    encontrados.append(estudiante)
+                    break   # ya coincidió, paso al siguiente estudiante
+        return encontrados
 
-    # ==================== U · UPDATE ====================
-    def actualizar(self, id_estudiante, cambios):
-        """cambios: diccionario solo con los campos que se quieren modificar."""
-        cambios = {campo: str(valor).strip() for campo, valor in cambios.items()}
-
-        desconocidos = campos_no_validos(cambios, self.CAMPOS_EDITABLES)
-        if desconocidos:
-            return False, f"Campos no válidos: {', '.join(sorted(desconocidos))}"
-        if not cambios:
-            return False, "No se indicó ningún cambio"
-        vacios = campos_faltantes(cambios, [c for c in cambios
-                                            if c in self.CAMPOS_OBLIGATORIOS])
-        if vacios:
-            return False, f"No se pueden dejar vacíos: {', '.join(vacios)}"
-
+    # ---------------- U · ACTUALIZAR ----------------
+    def actualizar(self, id_estudiante, datos):
         registros = self.archivo.leer()
         posicion = buscar_posicion(registros, id_estudiante)
         if posicion is None:
-            return False, f"No existe un estudiante con id {id_estudiante}"
+            return False, f"No existe un estudiante con id {id_estudiante}."
 
-        if "email" in cambios:
-            if not es_email_valido(cambios["email"]):
-                return False, "El email no tiene un formato válido"
-            if cambios["email"].lower() in valores_registrados(
-                    registros, "email", excepto_id=id_estudiante):
-                return False, "Ese email ya lo usa otro estudiante"
-        if "carnet" in cambios:
-            if cambios["carnet"].lower() in valores_registrados(
-                    registros, "carnet", excepto_id=id_estudiante):
-                return False, "Ese carnet ya lo usa otro estudiante"
+        nuevo = Estudiante(id_estudiante, datos["nombre"], datos["apellido"],
+                           datos["email"], datos["carnet"])
+        errores = nuevo.validar()
+        if errores:
+            return False, " ".join(errores)
 
-        registros[posicion].update(cambios)     # actualizo el diccionario
-        if not self.archivo.guardar(registros):
-            return False, "No se pudo escribir el archivo"
-        return True, f"Estudiante {id_estudiante} actualizado ({len(cambios)} campo/s)"
+        # excepto_id: no comparo el estudiante consigo mismo
+        if nuevo.email.lower() in valores_usados(registros, "email", id_estudiante):
+            return False, "Ese email ya lo usa otro estudiante."
+        if nuevo.carnet.lower() in valores_usados(registros, "carnet", id_estudiante):
+            return False, "Ese carnet ya lo usa otro estudiante."
 
-    # ==================== D · DELETE ====================
+        registros[posicion] = nuevo.a_diccionario()   # reemplazo en la lista
+        self.archivo.guardar(registros)
+        return True, f"Estudiante {id_estudiante} actualizado."
+
+    # ---------------- D · ELIMINAR ----------------
     def eliminar(self, id_estudiante):
         registros = self.archivo.leer()
-        # LISTA NUEVA sin ese registro: nunca borro mientras recorro
+        # Lista NUEVA con todos menos el que se elimina
         quedan = [r for r in registros if r["id"] != id_estudiante]
         if len(quedan) == len(registros):
-            return False, f"No existe un estudiante con id {id_estudiante}"
-        if not self.archivo.guardar(quedan):
-            return False, "No se pudo escribir el archivo"
-        return True, f"Estudiante {id_estudiante} eliminado"
+            return False, f"No existe un estudiante con id {id_estudiante}."
+        self.archivo.guardar(quedan)
+        return True, f"Estudiante {id_estudiante} eliminado."
 
-    # ==================== EXTRAS de la guía ====================
-    def agregar_nota(self, id_estudiante, materia, nota):
-        """La nota debe ser un número entre 0 y 20."""
-        materia = str(materia).strip()
-        if not materia:
-            return False, "La materia es obligatoria"
-        valor = convertir_nota(nota)
-        if valor is None:
-            return False, "La nota debe ser un número entre 0 y 20"
 
-        registros = self.archivo.leer()
-        posicion = buscar_posicion(registros, id_estudiante)
-        if posicion is None:
-            return False, f"No existe un estudiante con id {id_estudiante}"
+# ---------------------------------------------------------------------
+# PRUEBAS: se ejecutan solo si abres ESTE archivo y le das ▶ (Run).
+# Usan un archivo de prueba para no tocar los datos reales.
+# ---------------------------------------------------------------------
+def probar():
+    from shared.utilidades import mostrar_prueba
+    print("\n=== PRUEBAS DE ControladorEstudiante ===")
+    c = ControladorEstudiante("prueba_estudiantes.json")
+    c.archivo.borrar()
 
-        estudiante = Estudiante.desde_diccionario(registros[posicion])
-        estudiante.agregar_nota(materia, valor)
-        registros[posicion] = estudiante.a_diccionario()
-        if not self.archivo.guardar(registros):
-            return False, "No se pudo escribir el archivo"
-        return True, f"Nota {valor} agregada en {materia}"
+    ana = {"nombre": "Ana", "apellido": "Pérez", "email": "ana@correo.com", "carnet": "EST001"}
+    exito, _ = c.crear(ana)
+    mostrar_prueba("Crear un estudiante correcto", exito)
 
-    def materias_ofertadas(self):
-        """CONJUNTO con todas las materias inscritas por todos, sin repetir."""
-        todas = set()
-        for estudiante in self.obtener_todos():
-            todas = todas | estudiante.materias        # UNIÓN de conjuntos
-        return todas
+    exito, mensaje = c.crear(ana)
+    mostrar_prueba("No deja repetir el email -> " + mensaje, not exito)
 
-    def estudiantes_en_comun(self, id_a, id_b):
-        """Devuelve (exito, conjunto_de_materias) o (False, mensaje)."""
-        estudiante_a = self.obtener_por_id(id_a)
-        estudiante_b = self.obtener_por_id(id_b)
-        if estudiante_a is None or estudiante_b is None:
-            return False, "Uno de los dos estudiantes no existe"
-        return True, estudiante_a.materias_en_comun(estudiante_b)
+    otro = dict(ana, email="otra@correo.com")   # mismo carnet, otro email
+    exito, mensaje = c.crear(otro)
+    mostrar_prueba("No deja repetir el carnet -> " + mensaje, not exito)
+
+    vacio = {"nombre": "", "apellido": "", "email": "x", "carnet": ""}
+    exito, mensaje = c.crear(vacio)
+    mostrar_prueba("No deja crear con datos vacíos", not exito)
+
+    mostrar_prueba("Leer todos devuelve 1 estudiante", len(c.obtener_todos()) == 1)
+    mostrar_prueba("Buscar 'pér' encuentra a Ana", len(c.buscar("pér")) == 1)
+    mostrar_prueba("Buscar 'zzz' no encuentra nada", c.buscar("zzz") == [])
+
+    cambios = dict(ana, nombre="Ana María")
+    exito, _ = c.actualizar(1, cambios)
+    mostrar_prueba("Actualizar el nombre", exito and c.obtener_por_id(1).nombre == "Ana María")
+
+    exito, mensaje = c.actualizar(99, cambios)
+    mostrar_prueba("No actualiza un id que no existe -> " + mensaje, not exito)
+
+    exito, _ = c.eliminar(1)
+    mostrar_prueba("Eliminar el estudiante", exito and c.obtener_todos() == [])
+
+    exito, mensaje = c.eliminar(1)
+    mostrar_prueba("No elimina un id que ya no existe -> " + mensaje, not exito)
+
+    c.archivo.borrar()   # dejamos todo limpio
+
+
+if __name__ == "__main__":
+    probar()

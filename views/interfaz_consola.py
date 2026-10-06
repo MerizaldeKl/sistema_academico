@@ -1,140 +1,143 @@
-"""
-PROCESO 5 · Interfaz de Usuario: clase InterfazConsola
-La Vista solo hace tres cosas: mostrar, pedir datos y mostrar resultados.
-No valida reglas del negocio ni abre archivos JSON.
-Es el ÚNICO lugar del proyecto donde hay print() e input().
-"""
+# =====================================================================
+# PROCESO 5 · Interfaz de Usuario: clase InterfazConsola
+# Es la VISTA: el ÚNICO lugar donde se usa print() e input().
+# Muestra menús, pide datos y muestra mensajes.
+# Si el usuario escribe algo mal, le explica y le deja intentar de
+# nuevo, así el programa nunca se cierra por un error al escribir.
+# =====================================================================
 
 import os
 
 
 class InterfazConsola:
-    # DICCIONARIO: cada color tiene su etiqueta y su código de consola
-    COLORES = {
-        "ROJO": "\033[91m",
-        "VERDE": "\033[92m",
-        "AZUL": "\033[94m",
-        "AMARILLO": "\033[93m",
-        "CYAN": "\033[96m",
-        "BLANCO": "\033[97m",
-        "RESET": "\033[0m",
-    }
-    # TUPLA: respuestas afirmativas aceptadas. Es fija, por eso no es lista.
-    RESPUESTAS_SI = ("si", "sí", "s", "yes", "y")
 
-    # ---------------- mensajes ----------------
+    # TUPLAS con las respuestas aceptadas para "sí" y "no"
+    RESPUESTAS_SI = ("si", "sí", "s")
+    RESPUESTAS_NO = ("no", "n")
+
+    # ---------------- Mensajes ----------------
     def limpiar_pantalla(self):
-        os.system("clear" if os.name == "posix" else "cls")
-
-    def imprimir_color(self, texto, color):
-        codigo = self.COLORES.get(color, self.COLORES["BLANCO"])
-        print(f"{codigo}{texto}{self.COLORES['RESET']}")
+        os.system("cls" if os.name == "nt" else "clear")   # nt = Windows
 
     def titulo(self, texto):
         self.limpiar_pantalla()
-        self.imprimir_color("=" * 70, "AZUL")
-        print(texto.center(70))
-        self.imprimir_color("=" * 70, "AZUL")
-        print()
+        print("=" * 60)
+        print(texto.center(60))
+        print("=" * 60)
 
     def exito(self, mensaje):
-        self.imprimir_color(f"✓ {mensaje}", "VERDE")
+        print(f"\n✔ {mensaje}")
 
     def error(self, mensaje):
-        self.imprimir_color(f"✗ {mensaje}", "ROJO")
+        print(f"\n✘ {mensaje}")
 
     def info(self, mensaje):
-        self.imprimir_color(f"ℹ {mensaje}", "CYAN")
+        print(f"\nℹ {mensaje}")
+
+    def pausa(self):
+        input("\nPresione Enter para continuar...")
 
     def mostrar_resultado(self, exito, mensaje):
-        """Recibe la TUPLA (exito, mensaje) que devuelven los controladores."""
+        """Recibe la TUPLA (exito, mensaje) que devuelve el controlador."""
         if exito:
             self.exito(mensaje)
         else:
             self.error(mensaje)
 
-    def pausa(self):
-        input("\nPresione Enter para continuar...")
-
-    # ---------------- menús ----------------
-    def mostrar_menu(self, titulo, opciones):
-        """opciones: DICCIONARIO {tecla: (texto, funcion)}. Devuelve la tecla."""
-        self.titulo(titulo)
-        for tecla, (texto, _funcion) in opciones.items():
-            print(f"  {tecla}. {texto}")
+    def mostrar_lista(self, objetos):
+        """Imprime cada objeto usando su __str__."""
+        if not objetos:
+            self.info("No hay registros para mostrar.")
+            return
         print()
-        return input("Seleccione una opción: ").strip()
+        for objeto in objetos:
+            print(" ", objeto)
+        print(f"\nTotal: {len(objetos)} registro(s)")
 
-    # ---------------- pedir datos ----------------
+    # ---------------- Menús ----------------
+    def mostrar_menu(self, titulo, opciones):
+        """opciones: DICCIONARIO {"1": "Texto de la opción", ...}.
+        Repite la pregunta hasta que el usuario elija una opción válida."""
+        self.titulo(titulo)
+        for tecla, texto in opciones.items():
+            print(f"  {tecla}. {texto}")
+        while True:
+            tecla = input("\nSeleccione una opción: ").strip()
+            if tecla in opciones:          # 'in' busca en las claves del diccionario
+                return tecla
+            validas = ", ".join(opciones.keys())
+            self.error(f"Opción no válida. Escriba uno de estos números: {validas}")
+
+    # ---------------- Pedir datos ----------------
     def pedir_texto(self, etiqueta):
-        return input(f"{etiqueta}: ").strip()
+        """Pide un texto que NO puede quedar vacío."""
+        while True:
+            texto = input(f"{etiqueta}: ").strip()
+            if texto != "":
+                return texto
+            self.error("Este dato no puede quedar vacío. Escríbalo de nuevo.")
 
     def pedir_entero(self, etiqueta):
-        """Devuelve un entero, o None si el usuario no escribió un número."""
-        try:
-            return int(input(f"{etiqueta}: "))
-        except ValueError:
-            self.error("Debe escribir un número entero")
-            return None
+        """Pide un número entero. Si escriben letras, vuelve a preguntar."""
+        while True:
+            texto = input(f"{etiqueta}: ").strip()
+            if texto.isdigit():
+                return int(texto)
+            self.error("Debe escribir un número entero (solo dígitos). Ejemplo: 1")
 
     def confirmar(self, pregunta):
-        respuesta = input(f"{pregunta} (si/no): ").strip().lower()
-        return respuesta in self.RESPUESTAS_SI
+        """Pregunta sí o no. Repite hasta recibir una respuesta válida."""
+        while True:
+            respuesta = input(f"{pregunta} (si/no): ").strip().lower()
+            if respuesta in self.RESPUESTAS_SI:
+                return True
+            if respuesta in self.RESPUESTAS_NO:
+                return False
+            self.error("Responda solo 'si' o 'no'.")
 
     def pedir_formulario(self, campos):
-        """Recorre la TUPLA de campos y arma un DICCIONARIO con las respuestas.
-        Si mañana se agrega un campo al Modelo, este formulario se actualiza solo."""
+        """Recorre la TUPLA de campos y arma un DICCIONARIO con las respuestas."""
         datos = {}
         for campo in campos:
-            datos[campo] = input(f"{campo.capitalize()}: ")
+            datos[campo] = self.pedir_texto(campo.capitalize())
         return datos
 
     def pedir_cambios(self, campos, objeto):
-        """Arma un DICCIONARIO solo con los campos que el usuario escribió."""
-        print("Deje en blanco el campo que no quiera cambiar.\n")
-        cambios = {}
+        """Muestra el valor actual entre [ ]. Si el usuario presiona Enter
+        sin escribir nada, se queda el valor actual."""
+        print("Presione Enter para dejar el valor actual.\n")
+        datos = {}
         for campo in campos:
-            actual = getattr(objeto, campo)
+            actual = getattr(objeto, campo)     # getattr: lee el atributo por su nombre
             nuevo = input(f"{campo.capitalize()} [{actual}]: ").strip()
-            if nuevo:
-                cambios[campo] = nuevo
-        return cambios
+            datos[campo] = nuevo if nuevo != "" else actual
+        return datos
 
-    # ---------------- mostrar datos ----------------
-    def _formatear(self, valor):
-        """Convierte listas, conjuntos y diccionarios en texto legible."""
-        if isinstance(valor, (list, set, tuple)):
-            return ", ".join(str(v) for v in sorted(valor, key=str)) or "-"
-        if isinstance(valor, dict):
-            partes = [f"{clave}: {valores}" for clave, valores in valor.items()]
-            return " | ".join(partes) or "-"
-        if valor is None or valor == "":
-            return "-"
-        return str(valor)
 
-    def mostrar_tabla(self, objetos, columnas):
-        """columnas: TUPLA de tuplas (atributo, titulo, ancho)."""
-        encabezado = "".join(f"{titulo:<{ancho}}" for _attr, titulo, ancho in columnas)
-        total = sum(ancho for _attr, _titulo, ancho in columnas)
-        print(encabezado)
-        print("-" * total)
-        for objeto in objetos:
-            fila = ""
-            for atributo, _titulo, ancho in columnas:
-                texto = self._formatear(getattr(objeto, atributo, ""))
-                fila += f"{texto[:ancho - 1]:<{ancho}}"
-            print(fila)
-        print("-" * total)
-        self.info(f"Total: {len(objetos)} registro(s)")
+# ---------------------------------------------------------------------
+# PRUEBA MANUAL: se ejecuta solo si abres ESTE archivo y le das ▶ (Run).
+# Escribe cosas incorrectas a propósito para comprobar que el
+# programa te corrige y no se cierra.
+# ---------------------------------------------------------------------
+def probar():
+    interfaz = InterfazConsola()
+    print("\n=== PRUEBA MANUAL DE InterfazConsola ===")
+    print("Escriba datos INCORRECTOS a propósito y vea cómo responde.\n")
 
-    def mostrar_detalle(self, diccionario):
-        """Recorre el DICCIONARIO: clave y valor a la vez."""
-        for clave, valor in diccionario.items():
-            print(f"  {clave.replace('_', ' ').capitalize():<14}: {self._formatear(valor)}")
+    print("1) Escriba letras, por ejemplo 'abc', y luego un número:")
+    numero = interfaz.pedir_entero("Número")
+    interfaz.exito(f"Recibido el número {numero}")
 
-    def mostrar_lista(self, titulo, elementos):
-        print(titulo)
-        if not elementos:
-            self.info("(vacío)")
-        for elemento in elementos:
-            print(f"  • {elemento}")
+    print("\n2) Presione Enter sin escribir nada, y luego escriba su nombre:")
+    nombre = interfaz.pedir_texto("Nombre")
+    interfaz.exito(f"Recibido el nombre {nombre}")
+
+    print("\n3) Escriba 'quizás', y luego 'si' o 'no':")
+    respuesta = interfaz.confirmar("¿Le gusta programar?")
+    interfaz.exito(f"Respuesta recibida: {respuesta}")
+
+    interfaz.info("Prueba terminada: el programa nunca se cerró por un error al escribir.")
+
+
+if __name__ == "__main__":
+    probar()

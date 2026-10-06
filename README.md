@@ -1,105 +1,72 @@
 # Sistema Académico · CRUD en Python con MVC y JSON
 
-Práctica **G001-S05 · Estructura de Datos** (UNEMI).
-Sistema de consola para gestionar **Estudiantes, Docentes, Asignaturas y Cursos**,
-organizado con el patrón **MVC**, las cuatro colecciones de Python
-(`list`, `tuple`, `set`, `dict`) y almacenamiento en archivos **JSON**.
+Práctica **G001 · Estructura de Datos** (UNEMI)
+Autor: Kelvin Merizalde García
 
-Autor: Kleber Merizalde García
+Sistema de consola para gestionar **Estudiantes, Docentes, Asignaturas y Cursos**
+con el patrón **MVC**, guardando los datos en archivos **JSON**.
 
-## Cómo ejecutarlo
+## Cómo ejecutar
 
-Requisitos: Python 3.8 o superior (no usa librerías externas).
+Requisito: Python 3 (no usa librerías externas).
 
-```bash
-cd sistema_academico
-python main.py        # en Mac/Linux: python3 main.py
-```
+| Qué quiero hacer | Comando |
+|---|---|
+| Usar el sistema | `python main.py` |
+| Correr todas las pruebas automáticas | `python pruebas.py` |
+| Probar un solo archivo | Abrirlo en VS Code y presionar ▶ (Run) |
 
-La carpeta `data/` y los archivos JSON se crean solos la primera vez que se guarda algo.
-
-## Estructura del proyecto (procesos de la guía G001)
+## Estructura (procesos de G001)
 
 ```
 sistema_academico/
-├── main.py                      ← PROCESO 6: clase SistemaAcademico + menú principal
-├── shared/                      ← PROCESO 2: código reutilizable
-│   ├── __init__.py
-│   ├── archivo_json.py          ← clase ArchivoJSON (leer / guardar)
-│   ├── validaciones.py          ← email, campos obligatorios, notas, créditos
-│   └── utilidades.py            ← siguiente id, duplicados, búsqueda
-├── models/                      ← PROCESO 3: modelos de datos
-│   ├── __init__.py
-│   ├── estudiante.py            ← clase Estudiante
-│   ├── docente.py               ← clase Docente    (TAREA 1)
-│   ├── asignatura.py            ← clase Asignatura (TAREA 2)
-│   └── curso.py                 ← clase Curso      (TAREA 3)
-├── controllers/                 ← PROCESO 4: lógica CRUD
-│   ├── __init__.py
+├── main.py                 ← PROCESO 6: clase SistemaAcademico y menú principal
+├── pruebas.py              ← ejecuta todas las pruebas
+├── shared/                 ← PROCESO 2: código reutilizable
+│   ├── archivo_json.py     ← clase ArchivoJSON (leer y guardar)
+│   ├── validaciones.py     ← funciones de validación
+│   └── utilidades.py       ← siguiente id, duplicados, posiciones
+├── models/                 ← PROCESO 3: modelos de datos
+│   ├── estudiante.py       ← clase Estudiante
+│   ├── docente.py          ← clase Docente    (TAREA 1)
+│   ├── asignatura.py       ← clase Asignatura (TAREA 2)
+│   └── curso.py            ← clase Curso      (TAREA 3)
+├── controllers/            ← PROCESO 4: lógica CRUD
 │   ├── controlador_estudiante.py
-│   ├── controlador_docente.py   ← TAREA 1
-│   ├── controlador_asignatura.py← TAREA 2
-│   └── controlador_curso.py     ← TAREA 3
-├── views/                       ← PROCESO 5: interfaz de usuario
-│   ├── __init__.py
-│   └── interfaz_consola.py      ← clase InterfazConsola
-└── data/                        ← PROCESO 7: se crea automáticamente
-    ├── estudiantes.json
-    ├── docentes.json
-    ├── asignaturas.json
-    └── cursos.json
+│   ├── controlador_docente.py     (TAREA 1)
+│   ├── controlador_asignatura.py  (TAREA 2)
+│   └── controlador_curso.py       (TAREA 3)
+├── views/                  ← PROCESO 5: interfaz de usuario
+│   └── interfaz_consola.py ← clase InterfazConsola
+└── data/                   ← PROCESO 7: se crea sola con los archivos JSON
 ```
 
-## Responsabilidad de cada capa (MVC)
+Cada carpeta tiene un `__init__.py` vacío para que Python la reconozca como paquete.
 
-| Capa | Carpeta | Sí hace | Nunca hace |
-|---|---|---|---|
-| Modelo | `models/` | Define qué es cada dato y lo convierte a/desde diccionario | Leer archivos, `input()`, `print()` |
-| Controlador | `controllers/` | CRUD, validaciones, detectar duplicados, guardar con ArchivoJSON | `input()`, `print()` |
-| Vista | `views/` | Menús, pedir datos, mostrar tablas y mensajes | Abrir JSON, validar reglas |
-| Apoyo | `shared/` | Herramientas reutilizables | Conocer qué es un Estudiante o Docente |
-| Integración | `main.py` | Conecta controladores e interfaz | Validar o guardar directamente |
+## MVC: qué hace cada capa
 
-Cada operación del controlador devuelve una tupla `(exito, mensaje)` y la vista decide cómo mostrarla.
-
-## Operaciones disponibles
-
-| Módulo | CRUD + Buscar | Operaciones extra |
+| Capa | Carpeta | Qué hace |
 |---|---|---|
-| Estudiantes | Crear, ver todos, buscar, ver por id, actualizar, eliminar | Agregar nota (0–20), ver promedio, materias en común, materias ofertadas |
-| Docentes | Crear, ver todos, buscar, ver por id, actualizar, eliminar | Asignar/quitar asignatura, docentes por especialidad |
-| Asignaturas | Crear, ver todas, buscar, ver por id, actualizar, eliminar | — |
-| Cursos | Crear, ver todos, buscar, ver detalle, actualizar, eliminar | Asignar docente, agregar asignatura, inscribir/retirar estudiante |
+| Modelo | `models/` | Define cada dato, lo valida y lo convierte a diccionario |
+| Controlador | `controllers/` | Crear, leer, buscar, actualizar y eliminar; evita duplicados; guarda en JSON |
+| Vista | `views/` | Único lugar con `print()` e `input()` |
+| Apoyo | `shared/` | Herramientas que usan todos |
 
-## Validaciones
+## Pruebas
 
-- Campos obligatorios vacíos.
-- Formato de email.
-- Email de estudiante y de docente no repetido (con `set`).
-- Carnet de estudiante no repetido (con `set`).
-- Código de asignatura no repetido y no editable.
-- Créditos: número entero entre 1 y 10.
-- Nota: número entre 0 y 20.
-- Curso: no se repite el mismo nombre en el mismo periodo (`set` de tuplas).
-- Id inexistente en ver, actualizar, eliminar y en las conexiones entre módulos.
-- Al eliminar un docente, estudiante o asignatura se limpian sus referencias en los cursos.
+Cada archivo tiene al final una función `probar()` que se ejecuta solo cuando se
+abre ese archivo directamente. Las pruebas revisan los errores que puede cometer
+un usuario (campos vacíos, email mal escrito, letras donde van números, datos
+repetidos, ids que no existen).
 
-## Uso de las cuatro colecciones
+Además, el programa **no se cierra** cuando el usuario escribe mal: le explica
+qué está mal y le deja escribir de nuevo.
 
-| Colección | Dónde se usa |
-|---|---|
-| `list` | Registros leídos del JSON; notas de cada materia |
-| `tuple` | Campos de cada modelo, campos obligatorios/buscables, retornos `(exito, mensaje)`, columnas de tablas |
-| `set` | Emails/carnets/códigos registrados, materias de un estudiante, asignaturas de un docente, estudiantes de un curso |
-| `dict` | Cada registro, notas por materia, opciones de menú, docentes por especialidad |
+## Datos de cada registro
 
-JSON no conoce los `set`: se guardan como lista (`sorted(...)`) y al leer se vuelven a convertir con `set(...)`.
+G001 no especifica los atributos, así que se definieron estos:
 
-## Atributos definidos
-
-La guía G001 no especifica los atributos de Docente, Asignatura y Curso. Se definieron así:
-
-- **Estudiante:** id, nombre, apellido, email, carnet, notas, materias (igual que la guía CRUD).
-- **Docente:** id, nombre, apellido, email, teléfono, especialidad, asignaturas.
-- **Asignatura:** id, código, nombre, créditos.
-- **Curso:** id, nombre, periodo, id_docente, asignaturas, estudiantes.
+- **Estudiante:** id, nombre, apellido, email, carnet (email y carnet no se repiten)
+- **Docente:** id, nombre, apellido, email, especialidad (email no se repite)
+- **Asignatura:** id, código, nombre, créditos del 1 al 10 (código no se repite)
+- **Curso:** id, nombre, paralelo, periodo (no se repite el mismo curso, paralelo y periodo)
